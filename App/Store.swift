@@ -72,6 +72,8 @@ struct Settings: Codable, Equatable {
     var deskScale = 1.0         // free size of the desktop widget (0.6 ... 2)
     var autoUpdateCheck = true  // daily check for a new version on GitHub
     var panelScale = 1.0        // size of the window that opens from the menu bar (0.8 ... 1.5)
+    var quranPage = 1           // last page open in the mushaf tab
+    var quranMark: Int? = nil   // the user's bookmark
 
     var speakOn = true          // spoken announcement instead of the adhan (silent mode / meeting)
     var speakRepeats = 2
@@ -99,7 +101,7 @@ struct Settings: Codable, Equatable {
              hijriOffset, latinDigits, use24h, modes, voice, fajrVoice, volume, preReminder, smartPause, meetingSilent,
              khatmaOn, khatmaDays, khatmaStart, khatmaRead, khatmaCount, khatmaAfterPrayer,
              adhkarMorning, adhkarEvening, adhkarAfterPrayer, jumuah, khutbahBefore, suhoorBefore, launchAtLogin,
-             deskOn, deskSize, deskOnTop, deskScale, panelScale, autoUpdateCheck, speakOn, speakRepeats, speakInMeeting, speakVolume, speakTakbir
+             deskOn, deskSize, deskOnTop, deskScale, panelScale, autoUpdateCheck, speakOn, speakRepeats, speakInMeeting, speakVolume, speakTakbir, quranPage, quranMark
     }
 
     init(from decoder: Decoder) throws {
@@ -153,6 +155,8 @@ struct Settings: Codable, Equatable {
         speakInMeeting = v(.speakInMeeting, d.speakInMeeting)
         speakVolume = v(.speakVolume, d.speakVolume)
         speakTakbir = v(.speakTakbir, d.speakTakbir)
+        quranPage = min(Quran.pages, max(1, v(.quranPage, d.quranPage)))
+        quranMark = (try? c.decodeIfPresent(Int.self, forKey: .quranMark)).flatMap { $0 }.map { min(Quran.pages, max(1, $0)) }
     }
     private static let blank = Settings()
 }

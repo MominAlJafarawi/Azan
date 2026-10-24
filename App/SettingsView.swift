@@ -3,15 +3,16 @@ import CoreLocation
 
 struct SettingsView: View {
     @ObservedObject var model: AppModel
-    @State private var tab = 0
+    @Binding var tab: Int
+    var embedded = false
 
     var body: some View {
         let look = model.sky
         VStack(spacing: 0) {
             ZStack {
-                SkyBackground(look: look).ignoresSafeArea()
+                if !embedded { SkyBackground(look: look).ignoresSafeArea() }
                 VStack(spacing: 10) {
-                    Text("الإعدادات").font(AppFont.naskh(24, bold: true)).foregroundStyle(look.text)
+                    if !embedded { Text("الإعدادات").font(AppFont.naskh(24, bold: true)).foregroundStyle(look.text) }
                     GoldTabs(look: look, items: [
                         (0, "الموقع والحساب", "location"),
                         (1, "الأذان", "speaker.wave.2"),
@@ -22,8 +23,8 @@ struct SettingsView: View {
                 }
                 .padding(.vertical, 14)
             }
-            .frame(height: 110)
-            .padding(.top, -28)
+            .frame(height: embedded ? 64 : 110)
+            .padding(.top, embedded ? 0 : -28)
 
             Form {
                 switch tab {
@@ -36,13 +37,13 @@ struct SettingsView: View {
             }
             .formStyle(.grouped)
             .scrollContentBackground(.hidden)
-            .background(look.bottom)
+            .background(embedded ? Color.clear : look.bottom)
             .tint(look.gold)
         }
         .preferredColorScheme(.dark)
         .environment(\.layoutDirection, .rightToLeft)
         .environment(\.locale, Fmt.locale(latin: model.latin))
-        .frame(width: 600, height: 640)
+        .frame(minWidth: 560, minHeight: embedded ? 0 : 640)
     }
 }
 

@@ -66,6 +66,7 @@ struct EventCard: View {
     var meeting = false
     var close: () -> Void
     var openAdhkar: (AdhkarKind) -> Void
+    var openQuran: (Int) -> Void = { _ in }
 
     var body: some View {
         let look = model.sky
@@ -155,7 +156,7 @@ struct EventCard: View {
                     Text("وردك: صفحة \(Fmt.num(r.lowerBound, latin: model.latin))–\(Fmt.num(r.upperBound, latin: model.latin)) · سورة \(Quran.surah(onPage: r.lowerBound))")
                         .font(AppFont.naskh(18))
                     HStack {
-                        Button { NSWorkspace.shared.open(Quran.url(page: r.lowerBound)) } label: { Label("افتح المصحف", systemImage: "book") }
+                        Button { openQuran(r.lowerBound); close() } label: { Label("افتح المصحف", systemImage: "book") }
                         Button { model.markRead(to: r.upperBound); close() } label: { Label("قرأت", systemImage: "checkmark") }
                             .buttonStyle(.borderedProminent).tint(look.gold)
                     }
@@ -167,7 +168,7 @@ struct EventCard: View {
         case .eveningAdhkar:
             Button { openAdhkar(.evening); close() } label: { Label("ابدأ", systemImage: "play.fill") }.controlSize(.regular)
         case .kahf:
-            Button { NSWorkspace.shared.open(URL(string: "https://quran.com/18")!); close() } label: { Label("اقرأ سورة الكهف", systemImage: "book") }.controlSize(.regular)
+            Button { openQuran(Mushaf.shared.pageOf(sura: 18)); close() } label: { Label("اقرأ سورة الكهف", systemImage: "book") }.controlSize(.regular)
         default:
             EmptyView()
         }

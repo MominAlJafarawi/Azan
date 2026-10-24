@@ -132,6 +132,9 @@ struct MainView: View {
     /// natural (unscaled) height; when set, the content is drawn at settings.panelScale
     var naturalHeight: CGFloat? = nil
     var relayout: () -> Void = {}
+    var openQuran: (Int) -> Void = { _ in }
+    /// shown inside the main window (no size buttons)
+    var inWindow = false
 
     static let width: CGFloat = 400
 
@@ -202,15 +205,17 @@ struct MainView: View {
                 Spacer()
                 Text(Fmt.hijri(model.now, offset: model.settings.hijriOffset, latin: model.latin))
                     .font(AppFont.naskh(16, bold: true))
-                Button(action: close) {
-                    Image(systemName: "xmark").font(.system(size: 11, weight: .bold))
-                        .frame(width: 26, height: 26)
-                        .background(Circle().fill(look.text.opacity(0.12)))
-                        .overlay(Circle().strokeBorder(look.gold.opacity(0.4), lineWidth: 0.8))
+                if !inWindow {
+                    Button(action: close) {
+                        Image(systemName: "xmark").font(.system(size: 11, weight: .bold))
+                            .frame(width: 26, height: 26)
+                            .background(Circle().fill(look.text.opacity(0.12)))
+                            .overlay(Circle().strokeBorder(look.gold.opacity(0.4), lineWidth: 0.8))
+                    }
+                    .buttonStyle(.plain)
+                    .help("إغلاق")
+                    .padding(.leading, 6)
                 }
-                .buttonStyle(.plain)
-                .help("إغلاق")
-                .padding(.leading, 6)
             }
             .foregroundStyle(look.secondary)
 
@@ -360,7 +365,7 @@ struct MainView: View {
                         Text(behind == 0 ? "أنت على الموعد، ما شاء الله" : "باقي عليك اليوم \(Fmt.num(behind, latin: model.latin)) صفحة")
                             .font(.system(size: 12)).foregroundStyle(behind == 0 ? look.gold : look.secondary)
                         HStack(spacing: 8) {
-                            pill("افتح المصحف", "book", look, filled: false) { NSWorkspace.shared.open(Quran.url(page: r.lowerBound)) }
+                            pill("افتح المصحف", "book", look, filled: false) { openQuran(r.lowerBound) }
                             pill("قرأت", "checkmark", look, filled: true) { model.markRead(to: r.upperBound) }
                         }
                         .padding(.top, 2)
@@ -411,8 +416,10 @@ struct MainView: View {
             Spacer(minLength: 6)
             HStack(spacing: 6) {
                 footButton(model.settings.use24h ? "٢٤س" : "١٢س", help: "الساعة: ٢٤ أو ١٢") { model.settings.use24h.toggle() }
-                footButton("A−", help: "تصغير النافذة") { setScale(-0.1) }
-                footButton("A+", help: "تكبير النافذة") { setScale(0.1) }
+                if !inWindow {
+                    footButton("A−", help: "تصغير النافذة") { setScale(-0.1) }
+                    footButton("A+", help: "تكبير النافذة") { setScale(0.1) }
+                }
                 Button(action: quit) { Image(systemName: "power").font(.system(size: 14)) }.help("إنهاء").padding(.leading, 4)
             }
         }

@@ -29,19 +29,34 @@ struct AdhkarBook: Codable {
     }
 }
 
+/// counters survive switching tabs inside the main window; they start fresh every day
+final class AdhkarProgress: ObservableObject {
+    static let shared = AdhkarProgress()
+    @Published private var counts: [AdhkarKind: [String: Int]] = [:]
+    private var day = ""
+    private var today: String { Calendar.current.startOfDay(for: Date()).description }
+    func get(_ k: AdhkarKind) -> [String: Int] { day == today ? counts[k] ?? [:] : [:] }
+    func set(_ k: AdhkarKind, _ id: String, _ v: Int) {
+        if day != today { day = today; counts = [:] }
+        counts[k, default: [:]][id] = v
+    }
+}
+
 struct AdhkarView: View {
     @ObservedObject var model: AppModel
-    @State var kind: AdhkarKind
-    @State private var done: [String: Int] = [:]
+    @Binding var kind: AdhkarKind
+    var embedded = false
+    var openQuran: (Int) -> Void = { _ in }
+    @ObservedObject private var progress = AdhkarProgress.shared
+    private var done: [String: Int] { progress.get(kind) }
     let book = AdhkarBook.load()
 
     var body: some View {
         let look = model.sky
         ZStack {
-            SkyBackground(look: look).ignoresSafeArea()
+            if !embedded { SkyBackground(look: look).ignoresSafeArea() }
             VStack(spacing: 12) {
                 GoldTabs(look: look, items: AdhkarKind.allCases.map { ($0, $0.short, $0.symbol) }, selection: $kind)
-                .onChange(of: kind) { _, _ in done = [:] }
 
                 Text(kind.title).font(AppFont.naskh(28, bold: true))
                 let items = book?.list(kind) ?? []
@@ -64,7 +79,7 @@ struct AdhkarView: View {
         .environment(\.layoutDirection, .rightToLeft)
         .focusEffectDisabled()
         .preferredColorScheme(.dark)
-        .frame(minWidth: 460, minHeight: 560)
+        .frame(minWidth: 460, minHeight: embedded ? 0 : 560)
     }
 
     private func card(_ d: Dhikr, _ look: SkyLook) -> some View {
@@ -72,18 +87,29 @@ struct AdhkarView: View {
         let complete = count >= d.count
         return Button {
             guard !complete else { return }
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { done[d.id] = count + 1 }
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { progress.set(kind, d.id, count + 1) }
         } label: {
             VStack(alignment: .leading, spacing: 8) {
                 if let t = d.text {
                     Text(t).font(AppFont.naskh(20)).lineSpacing(8).multilineTextAlignment(.leading)
                         .fixedSize(horizontal: false, vertical: true)
                 } else if let title = d.title {
-                    HStack {
-                        Text(title).font(AppFont.naskh(20, bold: true))
-                        Spacer()
-                        if let r = d.ref, let u = URL(string: "https://quran.com/\(r)") {
-                            Link(destination: u) { Label("اقرأها في المصحف", systemImage: "book").font(.system(size: 12)) }
+                    Text(title).font(AppFont.naskh(20, bold: true)).foregroundStyle(look.gold)
+                    if let r = d.ref {
+                        let vs = Mushaf.shared.verses(ref: r)
+                        if !vs.isEmpty {
+                            (vs.reduce(Text("")) { t, v in
+                                t + Text(v.text) + Text(" ﴿\(Fmt.num(v.aya, latin: model.latin))﴾ ").foregroundColor(look.gold)
+                            })
+                            .font(AppFont.naskh(22)).lineSpacing(10).multilineTextAlignment(.leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                            if let f = vs.first {
+                                Button { openQuran(Mushaf.shared.pageOf(sura: f.sura, aya: f.aya)) } label: {
+                                    Label("سورة \(Mushaf.shared.suras[f.sura - 1].name)\(vs.count == 1 ? "، آية " + Fmt.num(f.aya, latin: model.latin) : "") · افتح بالمصحف", systemImage: "book")
+                                        .font(.system(size: 12))
+                                }
+                                .buttonStyle(.plain).foregroundStyle(look.secondary)
+                            }
                         }
                     }
                 }

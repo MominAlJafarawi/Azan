@@ -7,7 +7,7 @@ STAGE="${TMPDIR:-/tmp}/azan-build"
 APP="$STAGE/Azan.app"
 WX="$APP/Contents/PlugIns/AzanWidget.appex"
 rm -rf "$STAGE"
-mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources/Sounds" "$APP/Contents/Resources/Speech" "$WX/Contents/MacOS" "$WX/Contents/Resources" build
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources/Sounds" "$APP/Contents/Resources/Speech" "$APP/Contents/Resources/Quran" "$WX/Contents/MacOS" "$WX/Contents/Resources" build
 
 # universal: Apple Silicon + Intel
 for ARCH in arm64 x86_64; do
@@ -21,6 +21,7 @@ lipo -create "$STAGE/AzanWidget-arm64" "$STAGE/AzanWidget-x86_64" -output "$WX/C
 cp Resources/Sounds/*.mp3 "$APP/Contents/Resources/Sounds/"
 cp Resources/Speech/*.m4a "$APP/Contents/Resources/Speech/"
 cp Resources/adhkar.json "$APP/Contents/Resources/"
+cp Resources/Quran/quran-uthmani.txt Resources/Quran/quran-meta.json "$APP/Contents/Resources/Quran/"
 cp Resources/Fonts/Amiri-*.ttf "$APP/Contents/Resources/"
 cp Resources/Fonts/Amiri-*.ttf "$WX/Contents/Resources/"
 cp Info.plist "$APP/Contents/"
@@ -39,7 +40,7 @@ fi
 cp build/AppIcon.icns "$APP/Contents/Resources/"
 
 # manifest of every needed file (the app checks it at every start and repairs from a spare copy)
-( cd "$APP/Contents/Resources" && find . -type f \( -name '*.mp3' -o -name '*.m4a' -o -name '*.json' -o -name '*.ttf' \) ! -name manifest.json ! -name '._*' | sed 's|^\./||' | sort | while read f; do printf '%s\t%s\n' "$f" "$(shasum -a 256 "$f" | cut -d' ' -f1)"; done ) | python3 -c "
+( cd "$APP/Contents/Resources" && find . -type f \( -name '*.mp3' -o -name '*.m4a' -o -name '*.json' -o -name '*.ttf' -o -name 'quran-uthmani.txt' \) ! -name manifest.json ! -name '._*' | sed 's|^\./||' | sort | while read f; do printf '%s\t%s\n' "$f" "$(shasum -a 256 "$f" | cut -d' ' -f1)"; done ) | python3 -c "
 import sys,json; print(json.dumps(dict(l.rstrip('\n').split('\t') for l in sys.stdin), ensure_ascii=False, indent=1))" > "$APP/Contents/Resources/manifest.json"
 
 # everything must pass before anything is installed

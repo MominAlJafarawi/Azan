@@ -17,6 +17,7 @@ final class MenuPanelController: NSObject, NSWindowDelegate {
     private var positioning = false
     var openSettings: () -> Void = {}
     var openAdhkar: (AdhkarKind) -> Void = { _ in }
+    var openQuran: (Int) -> Void = { _ in }
     var isShown: Bool { panel?.isVisible ?? false }
 
     init(model: AppModel) { self.model = model }
@@ -29,7 +30,8 @@ final class MenuPanelController: NSObject, NSWindowDelegate {
                  openAdhkar: { [weak self] k in self?.close(); self?.openAdhkar(k) },
                  quit: { NSApp.terminate(nil) },
                  close: { [weak self] in self?.close(force: true) },
-                 naturalHeight: natural, relayout: { [weak self] in self?.relayout() })
+                 naturalHeight: natural, relayout: { [weak self] in self?.relayout() },
+                 openQuran: { [weak self] p in self?.close(); self?.openQuran(p) })
     }
 
     func toggle(from button: NSStatusBarButton) {

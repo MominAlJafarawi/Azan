@@ -7,8 +7,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var status: NSStatusItem!
     lazy var menuPanel = MenuPanelController(model: model)
     let floating = FloatingPanel()
-    var adhkarWindow: NSWindow?
-    var settingsWindow: NSWindow?
+    lazy var mainWindow = MainWindowController(model: model)
     var adhanCardOpen = false
     lazy var desk = DeskWidgetController(model: model)
     var deskSub: Any?
@@ -22,6 +21,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         menuPanel.openSettings = { [weak self] in self?.showSettings() }
         menuPanel.openAdhkar = { [weak self] k in self?.showAdhkar(k) }
+        menuPanel.openQuran = { [weak self] p in self?.showQuran(page: p) }
 
         model.onTick = { [weak self] in self?.updateTitle() }
         model.onEvent = { [weak self] e, meeting in self?.showEvent(e, meeting: meeting) }
@@ -81,7 +81,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func showEvent(_ e: AppEvent, meeting: Bool) {
         let view = EventCard(model: model, event: e, meeting: meeting, close: { [weak self] in self?.floating.close() },
-                             openAdhkar: { [weak self] k in self?.showAdhkar(k) })
+                             openAdhkar: { [weak self] k in self?.showAdhkar(k) },
+                             openQuran: { [weak self] p in self?.showQuran(page: p) })
         let auto: TimeInterval? = switch e.kind {
         case .adhan: model.playing != nil ? nil : 120
         case .pre, .khutbah: 45
@@ -96,33 +97,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         floating.show(UpdateCard(model: model, close: { [weak self] in self?.floating.close() }), autoClose: nil)
     }
 
+    // everything opens in the one main window, on the right tab
     func showAdhkar(_ k: AdhkarKind) {
         menuPanel.close()
-        let w = adhkarWindow ?? makeWindow(title: "الأذكار", size: NSSize(width: 520, height: 680))
-        w.contentViewController = NSHostingController(rootView: AdhkarView(model: model, kind: k))
-        adhkarWindow = w
-        w.center(); w.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
+        mainWindow.open { $0.tab = .adhkar; $0.adhkar = k }
     }
 
     func showSettings() {
         menuPanel.close()
-        let w = settingsWindow ?? makeWindow(title: "إعدادات أذان", size: NSSize(width: 600, height: 640))
-        if settingsWindow == nil { w.contentViewController = NSHostingController(rootView: SettingsView(model: model)) }
-        settingsWindow = w
-        w.center(); w.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
+        mainWindow.open { $0.tab = .settings }
     }
 
-    private func makeWindow(title: String, size: NSSize) -> NSWindow {
-        let w = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.titled, .closable, .fullSizeContentView],
-                         backing: .buffered, defer: false)
-        w.title = title
-        w.titlebarAppearsTransparent = true
-        w.titleVisibility = .hidden
-        w.isReleasedWhenClosed = false
-        w.isMovableByWindowBackground = true
-        return w
+    func showQuran(page: Int) {
+        menuPanel.close()
+        mainWindow.open { $0.tab = .quran; $0.quranPage = min(Quran.pages, max(1, page)) }
+    }
+
+    func showMain(_ tab: MainTab) {
+        menuPanel.close()
+        mainWindow.open { $0.tab = tab }
     }
 
     /// full adhan rehearsal for the next prayer: card + sound + smart pause
@@ -138,6 +131,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case "settings": showSettings()
         case "adhkar": showAdhkar(.morning)
         case "desk": desk.apply()
+        case "navtest":
+            showAdhkar(.evening); showQuran(page: 293)
+            let n = mainWindow.nav
+            Log.write("navtest: now \(n.state.tab.rawValue) page \(n.state.quranPage) back=\(n.canGoBack)")
+            n.back()
+            Log.write("navtest: after back \(n.state.tab.rawValue) \(n.state.adhkar.rawValue) back=\(n.canGoBack)")
         case "testadhan": testAdhan()
         case "announce": model.announce(.fajr)
         case "update": Updater.shared.check(force: true)
@@ -155,6 +154,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         case "playing": testAdhan(); DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { self.togglePopover() }
         default:
+            if what.hasPrefix("main:"), let t = MainTab(rawValue: String(what.dropFirst(5))) { showMain(t); return }
+            if what.hasPrefix("quran:"), let p = Int(what.dropFirst(6)) { showQuran(page: p); return }
+            if what.hasPrefix("adhkar:"), let k = AdhkarKind(rawValue: String(what.dropFirst(7))) { showAdhkar(k); return }
             if what.hasPrefix("event:"), let k = EventKind(rawValue: String(what.dropFirst(6))) {
                 let p = Prayer(rawValue: Int(ProcessInfo.processInfo.environment["AZAN_PRAYER"] ?? "3") ?? 3)
                 showEvent(AppEvent(kind: k, prayer: p, time: k == .missed ? Date().addingTimeInterval(-1500) : Date(), window: 60, until: k == .missed ? Date().addingTimeInterval(3600) : nil), meeting: ProcessInfo.processInfo.environment["AZAN_MEETING"] != nil)
@@ -251,7 +253,21 @@ func selfTest(resources: String, bundle: String?) -> Int32 {
             check(AppModel.missedEvent(AppEvent(kind: .adhan, prayer: .sunrise, time: sr, window: 120), now: sr.addingTimeInterval(600), schedule: sch) == nil, "no missed card for sunrise")
         } else { check(false, "missed card times") }
     }
-    // 9. hijri + sky
+    // 9. full mushaf (Tanzil text, verbatim, with its copyright block)
+    let mu = Mushaf(text: URL(fileURLWithPath: resources + "/Quran/quran-uthmani.txt"), meta: URL(fileURLWithPath: resources + "/Quran/quran-meta.json"))
+    check(mu.loaded && mu.verseCount == 6236 && mu.suras.count == 114, "mushaf loads (6236 verses, 114 surahs)")
+    check((try? String(contentsOfFile: resources + "/Quran/quran-uthmani.txt", encoding: .utf8))?.contains("Tanzil Project") == true, "tanzil copyright kept")
+    let p1 = mu.page(1), p604 = mu.page(Quran.pages)
+    check(p1.count == 7 && p1.first?.sura == 1 && p1.last?.aya == 7, "page 1 = al-fatiha")
+    check(mu.page(293).contains { $0.sura == 18 && $0.aya == 1 } && mu.pageOf(sura: 18) == 293, "al-kahf starts on page 293")
+    check(p604.last?.sura == 114 && p604.contains { $0.sura == 112 }, "page 604 ends with an-nas")
+    check((1...Quran.pages).reduce(0) { $0 + mu.page($1).count } == 6236, "all pages together hold every verse once")
+    check(mu.juz(ofPage: 22) == 2 && mu.juz(ofPage: 582) == 30, "juz of page")
+    check(mu.verses(ref: "2/255").count == 1 && mu.verses(ref: "112").count == 4, "adhkar refs (al-kursi, al-ikhlas)")
+    var allSurahsMatch = true
+    for i in 0..<114 where Quran.surahStart[i] != mu.pageOf(sura: i + 1) { allSurahsMatch = false }
+    check(allSurahsMatch, "surah start pages match the old table")
+    // 10. hijri + sky
     check(Fmt.hijri(Date(), offset: 0, latin: false).hasSuffix("هـ"), "hijri text")
     check(SkyLook.at(altitude: -30, rising: false).isDark && !SkyLook.at(altitude: 50, rising: true).isDark, "sky text contrast")
     print(fails == 0 ? "SELFTEST PASSED" : "SELFTEST FAILED (\(fails))")
